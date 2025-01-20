@@ -48,6 +48,12 @@ def resolve_dns(domain):
              User: ipinfo.io
              My Response: 34.117.59.81
              
+             User: maoyue.tw
+             My Response: 104.21.13.254
+             
+             User: google.dev
+             My Response: 216.58.212.206
+             
              User: abcdefghi
              My Response: unknown
              """,
@@ -151,7 +157,7 @@ class DoHHandler(BaseHTTPRequestHandler):
                 if ":" in ip_address:
                     response_message += b"\x00\x1c"  # TYPE: AAAA (IPv6)
                     response_message += b"\x00\x01"  # CLASS: IN
-                    response_message += b"\x00\x00\x00\x78"  # TTL: 120 seconds
+                    response_message += b"\x00\x00\x00\x00"  # TTL: 0 seconds
                     response_message += b"\x00\x10"  # RDLENGTH: 16 bytes
                     response_message += socket.inet_pton(socket.AF_INET6, ip_address)
                 else:
@@ -159,7 +165,7 @@ class DoHHandler(BaseHTTPRequestHandler):
                         socket.inet_pton(socket.AF_INET, ip_address)
                         response_message += b"\x00\x01"  # TYPE: A (IPv4)
                         response_message += b"\x00\x01"  # CLASS: IN
-                        response_message += b"\x00\x00\x00\x78"  # TTL: 120 seconds
+                        response_message += b"\x00\x00\x00\x00"  # TTL: 0 seconds
                         response_message += b"\x00\x04"  # RDLENGTH: 4 bytes
                         response_message += socket.inet_pton(socket.AF_INET, ip_address)
                     except:
