@@ -6,13 +6,13 @@ import ssl
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from groq import Groq
+import socket
 
 load_dotenv()
 
 client = Groq(
     api_key=os.getenv("GROQ_API_KEY"),
 )
-
 
 def resolve_dns(domain):
     chat_completion = client.chat.completions.create(
@@ -25,6 +25,8 @@ def resolve_dns(domain):
              2. Respond only with an IPv4 with correct format.
              3. With only IPv4; any other words are not allowed.
              4. Never use IP from examples unless you can confirm the domain point to these IPs.
+             5. Only response "unknown" when TLD is not vaild or when it is wrong format.
+             6. Most domains are vaild, DONT response "unknown" so often.
              
              Here are some examples for your reference:
              
@@ -45,6 +47,9 @@ def resolve_dns(domain):
              
              User: ipinfo.io
              My Response: 34.117.59.81
+             
+             User: abcdefghi
+             My Response: unknown
              """,
             },
             {
@@ -54,13 +59,16 @@ def resolve_dns(domain):
         ],
         model="llama-3.3-70b-specdec",
     )
-    print("LLM relsove " + domain + " as " + chat_completion.choices[0].message.content)
-    return [chat_completion.choices[0].message.content]
+    response_content = chat_completion.choices[0].message.content
+    print("LLM relsove " + domain + " as " + response_content)
 
+    if "unknown" in response_content.lower():
+        return []
+    else:
+        return [response_content]
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     pass
-
 
 class DoHHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -133,35 +141,49 @@ class DoHHandler(BaseHTTPRequestHandler):
 
         if len(ip_addresses) > 0:
             response_header += struct.pack("!H", len(ip_addresses))  # ANCOUNT (Answers)
-        else:
-            response_header += b"\x00\x00"  # RCODE=3 Domain not exist
+            response_header += b"\x00\x00"  # NSCOUNT (Authoritative nameservers)
+            response_header += b"\x00\x00"  # ARCOUNT (Additional records)
+            response_message = response_header + query_message[12:]
 
+            for ip_address in ip_addresses:
+                response_message += b"\xc0\x0c"
+
+                if ":" in ip_address:
+                    response_message += b"\x00\x1c"  # TYPE: AAAA (IPv6)
+                    response_message += b"\x00\x01"  # CLASS: IN
+                    response_message += b"\x00\x00\x00\x78"  # TTL: 120 seconds
+                    response_message += b"\x00\x10"  # RDLENGTH: 16 bytes
+                    response_message += socket.inet_pton(socket.AF_INET6, ip_address)
+                else:
+                    try:
+                        socket.inet_pton(socket.AF_INET, ip_address)
+                        response_message += b"\x00\x01"  # TYPE: A (IPv4)
+                        response_message += b"\x00\x01"  # CLASS: IN
+                        response_message += b"\x00\x00\x00\x78"  # TTL: 120 seconds
+                        response_message += b"\x00\x04"  # RDLENGTH: 4 bytes
+                        response_message += socket.inet_pton(socket.AF_INET, ip_address)
+                    except:
+                        # fallback to NXDOMAIN if ip_address is not a valid IPv4.
+                        return self.create_nxdomain_response(query_message)
+
+            return response_message
+        else:
+            # Return NXDOMAIN response
+            return self.create_nxdomain_response(query_message)
+        
+
+    def create_nxdomain_response(self, query_message):
+        query_id = query_message[:2]
+        response_header = bytearray(query_id)
+        response_header += b"\x81\x83"  # QR=1, AA=1, RA=1, RCODE=3
+        response_header += query_message[4:6]  # QDCOUNT (Questions)
+        response_header += b"\x00\x00"  # ANCOUNT (Answers)
         response_header += b"\x00\x00"  # NSCOUNT (Authoritative nameservers)
         response_header += b"\x00\x00"  # ARCOUNT (Additional records)
-
         response_message = response_header + query_message[12:]
-
-        for ip_address in ip_addresses:
-            response_message += b"\xc0\x0c"
-
-            if ":" in ip_address:
-                response_message += b"\x00\x1c"  # TYPE: AAAA (IPv6)
-                response_message += b"\x00\x01"  # CLASS: IN
-                response_message += b"\x00\x00\x00\x78"  # TTL: 120 seconds
-                response_message += b"\x00\x10"  # RDLENGTH: 16 bytes
-                response_message += socket.inet_pton(socket.AF_INET6, ip_address)
-            else:
-                response_message += b"\x00\x01"  # TYPE: A (IPv4)
-                response_message += b"\x00\x01"  # CLASS: IN
-                response_message += b"\x00\x00\x00\x78"  # TTL: 120 seconds
-                response_message += b"\x00\x04"  # RDLENGTH: 4 bytes
-                response_message += socket.inet_pton(socket.AF_INET, ip_address)
-
         return response_message
 
-
 if __name__ == "__main__":
-    import socket
 
     server_address = ("", 443)
     httpd = ThreadedHTTPServer(server_address, DoHHandler)
