@@ -49,7 +49,7 @@ def resolve_dns(domain):
                 "content": domain,
             },
         ],
-        model="llama-3.3-70b-versatile",
+        model="llama-3.3-70b-specdec",
     )
     return [chat_completion.choices[0].message.content]
 
