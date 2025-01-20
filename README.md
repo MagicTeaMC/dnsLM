@@ -1,5 +1,5 @@
 # dnsLM
-A weird project that use LLM to resolve domains
+dnsLM: Where AI meets DNS—because even domains deserve a little intelligence!
 ## setup
 1. Generating self-signed certificate
 ```
