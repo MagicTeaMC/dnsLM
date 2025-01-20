@@ -1,4 +1,5 @@
 import base64
+from dotenv import load_dotenv
 import os
 import struct
 import ssl
@@ -6,8 +7,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from groq import Groq
 
+load_dotenv()
+
 client = Groq(
-  #  api_key=os.getenv("GROQ_API_KEY"),
+    api_key=os.getenv("GROQ_API_KEY"),
 )
 
 
@@ -51,6 +54,7 @@ def resolve_dns(domain):
         ],
         model="llama-3.3-70b-specdec",
     )
+    print("LLM relsove " + domain + " as " + chat_completion.choices[0].message.content)
     return [chat_completion.choices[0].message.content]
 
 
