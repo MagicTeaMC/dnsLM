@@ -1,5 +1,5 @@
 # dnsLM
-A weird project that use LLM to resolver domains
+A weird project that use LLM to resolve domains
 ## setup
 1. Generating self-signed certificate
 ```
